@@ -69,76 +69,54 @@ double eucl_dist(int n, double x1[], double x2[])
   */
 void _zero_pad_trunc(double data[], size_t samples, double *rate)
 {
-    size_t new_samples;
+    int j = samples / 2;
+    int i = j;
+  
+    data[j] = 0.;
+    double null = 1.;
     
-    if (*rate > 1.0) {
-        // Zero-padding
-        new_samples = (size_t)(samples * (*rate));
-        if (new_samples > samples) {
-            memset(data + samples, 0, (new_samples - samples) * sizeof(double));
-        }
-    } else if (*rate < 1.0) {
-        // Truncating
-        new_samples = (size_t)(samples * (*rate));
-        if (new_samples < samples) {
-            // Truncation is implicit as we just consider fewer samples
-        }
-    } else {
-        // No change
-        new_samples = samples;
-    }
+    while (null / samples < *rate){
+      i++;
+      j--;
 
-    // Update the rate to reflect the actual compression rate
-    *rate = (double)new_samples / samples;
+      data[i] = 0.;
+      data[j] = 0.;
+      null = null + 2.;
+    }
+    *rate = null / samples;
 }
 
 /** Élague les coefficients les plus petits
   * @param data    en entrée : tableau contenant les données numériques
-  *                en sortie : tableaul élagué
+  *                en sortie : tableau élagué
   * @param samples longueur de `data`
   * @param rate    en entrée : le taux de compression minimal désiré
   *                en sortie : le taux de compression réel
   */
-void _zero_pad_bests(double data[], size_t samples, double *rate)
-{
-    size_t new_samples;
-    size_t i;
+void _zero_pad_bests(double data[], size_t samples, double *rate) {
+    size_t num_to_keep = (size_t)((1.0 - *rate) * samples);
 
-    if (*rate < 1.0) {
-        // Determine the number of samples to keep
-        new_samples = (size_t)(samples * (*rate));
+    double *sorted_data = (double *)malloc(samples * sizeof(double));
+    if (!sorted_data) return; // Vérifier l'allocation de mémoire
+    memcpy(sorted_data, data, samples * sizeof(double));
 
-        // Create a copy of the data array to sort
-        double *sorted_data = (double *)malloc(samples * sizeof(double));
-        if (sorted_data == NULL) {
-            // Handle memory allocation failure
-            return;
+    qsort(sorted_data, samples, sizeof(double), compare);
+
+    double threshold = fabs(sorted_data[samples - num_to_keep]);
+    free(sorted_data); // Libérer la mémoire temporaire
+
+    size_t zeroed = 0;
+    for (size_t i = 0; i < samples; i++) {
+        if (fabs(data[i]) < threshold) {
+            data[i] = 0.0;
+            zeroed++;
         }
-        memcpy(sorted_data, data, samples * sizeof(double));
-
-        // Sort the copy by absolute value
-        qsort(sorted_data, samples, sizeof(double), compare);
-
-        // Determine the threshold value
-        double threshold = fabs(sorted_data[samples - new_samples]);
-
-        // Zero out the smallest coefficients in the original data array
-        for (i = 0; i < samples; i++) {
-            if (fabs(data[i]) < threshold) {
-                data[i] = 0.0;
-            }
-        }
-
-        // Free the sorted data array
-        free(sorted_data);
-    } else {
-        // No change if rate is 1.0 or greater
-        new_samples = samples;
     }
 
-    // Update the rate to reflect the actual compression rate
-    *rate = (double)new_samples / samples;
+    *rate = (double)zeroed / samples;
 }
+
+
 
 /** Élague les données numériques issues de la FFT
   * @param method  méthode utilisée (TRUNCATE ou BESTS)
